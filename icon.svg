@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Coffee cup">
+  <rect width="512" height="512" rx="112" fill="#3f2a1f"/>
+  <path d="M129 179h238v93c0 78-50 127-119 127s-119-49-119-127z" fill="#f8f4ed"/>
+  <path d="M367 209h27c42 0 66 28 66 61s-24 62-66 62h-43" fill="none" stroke="#f8f4ed" stroke-width="28" stroke-linecap="round"/>
+  <path d="M196 139c-19-31 26-45 5-78M261 139c-19-31 26-45 5-78M326 139c-19-31 26-45 5-78" fill="none" stroke="#d9b38c" stroke-width="18" stroke-linecap="round"/>
+</svg>

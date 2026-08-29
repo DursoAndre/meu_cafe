@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#3f2a1f" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';"
+    />
+    <meta
+      name="description"
+      content="Catálogo pessoal e local de cafés, avaliações e receitas."
+    />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>Meu Café</title>
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Catálogo local · seus dados ficam neste aparelho</p>
+        <h1>Meu Café</h1>
+      </div>
+      <div class="header-actions">
+        <button id="installButton" class="secondary" type="button" hidden>Instalar app</button>
+        <button id="restoreButton" class="secondary" type="button">Restaurar</button>
+        <button id="exportButton" class="secondary" type="button">Fazer backup</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="backupBanner" class="backup-banner" hidden>
+        <div>
+          <strong>Backup pendente</strong>
+          <p>Há alterações salvas somente neste aparelho.</p>
+        </div>
+        <button id="bannerBackupButton" class="primary" type="button">Baixar backup</button>
+      </section>
+
+      <section id="updateBanner" class="backup-banner" hidden>
+        <div>
+          <strong>Atualização disponível</strong>
+          <p>Recarregue para usar a nova versão sem afetar seus cafés.</p>
+        </div>
+        <button id="applyUpdateButton" class="primary" type="button">Atualizar</button>
+      </section>
+
+      <section id="storageNotice" class="notice">
+        <strong>Importante:</strong>
+        instale o app antes do primeiro cadastro. Fotos e cafés ficam no armazenamento desta
+        instalação. Guarde backups no iCloud Drive, Google Drive ou outro local seguro.
+      </section>
+
+      <section class="toolbar" aria-label="Filtros">
+        <label class="search">
+          <span>Buscar</span>
+          <input id="searchInput" type="search" placeholder="Café, torrefação, origem…" />
+        </label>
+        <label>
+          <span>Status</span>
+          <select id="statusFilter">
+            <option value="all">Todos</option>
+            <option value="active">Em uso</option>
+            <option value="finished">Finalizados</option>
+            <option value="favorites">Notas 4–5</option>
+          </select>
+        </label>
+        <button id="newCoffeeButton" class="primary toolbar-action" type="button">
+          + Adicionar café
+        </button>
+      </section>
+
+      <section id="emptyState" class="empty-state" hidden>
+        <img src="./icon.svg" alt="" width="72" height="72" />
+        <h2>Seu catálogo está vazio</h2>
+        <p>Cole a análise produzida pela skill do Claude e envie as fotos.</p>
+        <button id="emptyAddButton" class="primary" type="button">Adicionar primeiro café</button>
+      </section>
+
+      <section id="coffeeGrid" class="coffee-grid"></section>
+    </main>
+
+    <dialog id="importDialog" class="modal">
+      <form id="importForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Novo registro</p>
+            <h2>Importar análise do Claude</h2>
+          </div>
+          <button class="icon-button" type="button" data-close="importDialog" aria-label="Fechar">
+            ×
+          </button>
+        </div>
+
+        <ol class="steps-intro">
+          <li>Envie as fotos à skill no Claude.</li>
+          <li>Copie somente o bloco JSON produzido.</li>
+          <li>Cole abaixo, confira e adicione as fotos.</li>
+        </ol>
+
+        <label for="jsonInput">JSON da análise</label>
+        <textarea
+          id="jsonInput"
+          rows="12"
+          spellcheck="false"
+          placeholder='{"schema_version":"1.0.0", ...}'
+          required
+        ></textarea>
+        <div class="inline-actions">
+          <button id="validateButton" class="secondary" type="button">Validar e visualizar</button>
+          <span id="validationStatus" class="muted" role="status"></span>
+        </div>
+        <ul id="validationErrors" class="error-list" aria-live="assertive"></ul>
+
+        <section id="importPreview" class="import-preview" hidden>
+          <h3>Prévia</h3>
+          <div id="previewContent"></div>
+        </section>
+
+        <div class="file-grid">
+          <label class="file-input">
+            <span>Foto do pacote</span>
+            <input
+              id="packagePhoto"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              capture="environment"
+            />
+            <small>Será reduzida antes de ficar armazenada no aparelho.</small>
+          </label>
+          <label class="file-input">
+            <span>Foto da cartilha</span>
+            <input
+              id="cardPhoto"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              capture="environment"
+            />
+          </label>
+        </div>
+
+        <p id="saveError" class="error" role="alert"></p>
+        <div class="modal-actions">
+          <button class="secondary" type="button" data-close="importDialog">Cancelar</button>
+          <button id="saveCoffeeButton" class="primary" type="submit" disabled>
+            Salvar café
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="detailDialog" class="modal detail-modal">
+      <div class="modal-header">
+        <div>
+          <p id="detailRoaster" class="eyebrow"></p>
+          <h2 id="detailName"></h2>
+        </div>
+        <button class="icon-button" type="button" data-close="detailDialog" aria-label="Fechar">
+          ×
+        </button>
+      </div>
+      <div id="detailBody"></div>
+    </dialog>
+
+    <dialog id="restoreDialog" class="modal small-modal">
+      <form id="restoreForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Recuperação</p>
+            <h2>Restaurar backup</h2>
+          </div>
+          <button class="icon-button" type="button" data-close="restoreDialog" aria-label="Fechar">
+            ×
+          </button>
+        </div>
+        <p>
+          Os cafés do arquivo serão adicionados. Se algum já existir, você poderá manter a
+          versão local ou substituí-la pela versão do backup.
+        </p>
+        <label>
+          <span>Arquivo `meu-cafe-backup-…json`</span>
+          <input id="backupFile" type="file" accept="application/json,.json" required />
+        </label>
+        <p id="restoreError" class="error" role="alert"></p>
+        <div class="modal-actions">
+          <button class="secondary" type="button" data-close="restoreDialog">Cancelar</button>
+          <button id="restoreSubmitButton" class="primary" type="submit">Restaurar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <template id="coffeeCardTemplate">
+      <article class="coffee-card">
+        <button class="card-button" type="button">
+          <div class="photo-frame">
+            <img class="coffee-photo" alt="" loading="lazy" />
+          </div>
+          <div class="card-content">
+            <p class="card-roaster eyebrow"></p>
+            <h2 class="card-name"></h2>
+            <p class="card-origin muted"></p>
+            <div class="card-meta">
+              <span class="method-chip"></span>
+              <span class="rating-display"></span>
+            </div>
+          </div>
+        </button>
+      </article>
+    </template>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
