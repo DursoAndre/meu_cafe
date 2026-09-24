@@ -1,6 +1,6 @@
 const scopeKey = new URL(self.registration.scope).pathname.replace(/[^a-z0-9]/gi, "-");
 const CACHE_PREFIX = `meu-cafe-local-${scopeKey}-`;
-const CACHE_NAME = `${CACHE_PREFIX}v3`;
+const CACHE_NAME = `${CACHE_PREFIX}v4`;
 const ASSETS = [
   "./",
   "./index.html",

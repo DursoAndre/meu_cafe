@@ -372,17 +372,47 @@ function appendFact(grid, label, value) {
   grid.append(item);
 }
 
+const GRIND_LABELS = {
+  fine: "Fina",
+  "medium-fine": "Média-fina",
+  medium: "Média",
+  "medium-coarse": "Média-grossa",
+  coarse: "Grossa",
+};
+
+const METHOD_OPTIONS = [
+  ["v60", "V60"],
+  ["french_press", "Prensa"],
+];
+const DOSE_OPTIONS = [10, 15, 30];
+
 function renderRecipe(recipe, recommended) {
   const card = element("article", `recipe-card${recommended ? " recommended" : ""}`);
-  card.append(element("h4", null, `${methodLabel(recipe.method)} · ${recipe.dose_g} g`));
-  if (recommended) card.append(element("span", "tag", "Recomendado"));
-  card.append(
-    element(
-      "p",
-      "muted",
-      `${recipe.water_g} g de água · 1:${recipe.ratio} · ${recipe.temperature_c} °C · ${recipe.grind.relative}`,
-    ),
-  );
+  const heading = element("div", "recipe-heading");
+  heading.append(element("h4", null, `${methodLabel(recipe.method)} · ${recipe.dose_g} g`));
+  if (recommended) heading.append(element("span", "tag", "Recomendado"));
+  card.append(heading);
+
+  const grind = [
+    GRIND_LABELS[recipe.grind.relative] ?? recipe.grind.relative,
+    recipe.grind.grinder_setting,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const stats = element("dl", "recipe-stats");
+  [
+    ["Água", `${recipe.water_g} g`],
+    ["Proporção", `1:${recipe.ratio}`],
+    ["Temperatura", `${recipe.temperature_c} °C`],
+    ["Moagem", grind],
+    ["Tempo total", formatTime(recipe.total_time_seconds)],
+  ].forEach(([label, value]) => {
+    const item = element("div");
+    item.append(element("dt", null, label), element("dd", null, value));
+    stats.append(item);
+  });
+  card.append(stats);
+
   const list = element("ol");
   recipe.steps.forEach((step) => {
     const water =
@@ -391,15 +421,121 @@ function renderRecipe(recipe, recommended) {
       element("li", null, `${formatTime(step.at_seconds)}: ${step.action}${water}`),
     );
   });
-  card.append(
-    list,
-    element("p", "muted", `Tempo total: ${formatTime(recipe.total_time_seconds)}`),
-    element("p", null, recipe.rationale),
-  );
+  card.append(list, element("p", null, recipe.rationale));
   if (recipe.capacity_warning) {
     card.append(element("p", "error", "Preparo grande: confirme a capacidade."));
   }
   return card;
+}
+
+function segmentedGroup(label, options, onSelect) {
+  const group = element("div", "segmented-group");
+  group.append(element("span", "segmented-label", label));
+  const row = element("div", "segmented");
+  row.setAttribute("role", "group");
+  row.setAttribute("aria-label", label);
+  const buttons = options.map((option) => {
+    const button = element(
+      "button",
+      "segment",
+      option.recommended ? `${option.label} ★` : option.label,
+    );
+    button.type = "button";
+    if (option.recommended) {
+      button.setAttribute("aria-label", `${option.label} (recomendado)`);
+    }
+    button.addEventListener("click", () => onSelect(option.value));
+    row.append(button);
+    return [option.value, button];
+  });
+  group.append(row);
+  return {
+    node: group,
+    select(value) {
+      buttons.forEach(([optionValue, button]) => {
+        button.setAttribute("aria-pressed", String(optionValue === value));
+      });
+    },
+    focus(value) {
+      buttons.find(([optionValue]) => optionValue === value)?.[1].focus();
+    },
+  };
+}
+
+function renderRecipeViewer(data) {
+  const recommended = data.recommendation;
+  let method = recommended.method;
+  let dose = recommended.dose_g;
+
+  const section = element("section", "detail-section recipe-viewer");
+  section.append(element("h3", null, "Receitas"));
+
+  const methodGroup = segmentedGroup(
+    "Método",
+    METHOD_OPTIONS.map(([value, label]) => ({
+      value,
+      label,
+      recommended: value === recommended.method,
+    })),
+    (value) => {
+      method = value;
+      update();
+    },
+  );
+  const doseGroup = segmentedGroup(
+    "Gramatura",
+    DOSE_OPTIONS.map((value) => ({
+      value,
+      label: `${value} g`,
+      recommended: value === recommended.dose_g,
+    })),
+    (value) => {
+      dose = value;
+      update();
+    },
+  );
+  const picker = element("div", "recipe-picker");
+  picker.append(methodGroup.node, doseGroup.node);
+
+  const content = element("div", "recipe-content");
+  content.setAttribute("aria-live", "polite");
+  section.append(picker, content);
+
+  function update() {
+    methodGroup.select(method);
+    doseGroup.select(dose);
+    const recipe = data.recipes.find(
+      (item) => item.method === method && item.dose_g === dose,
+    );
+    const isRecommended = method === recommended.method && dose === recommended.dose_g;
+    content.replaceChildren();
+    if (isRecommended) {
+      const reason = element("div", "recommendation");
+      reason.append(
+        element("p", "eyebrow", "Recomendado para este café"),
+        element("p", null, recommended.reason),
+      );
+      content.append(reason);
+    } else {
+      const back = element(
+        "button",
+        "secondary back-to-recommended",
+        `Voltar à recomendada (${methodLabel(recommended.method)} · ${recommended.dose_g} g)`,
+      );
+      back.type = "button";
+      back.addEventListener("click", () => {
+        method = recommended.method;
+        dose = recommended.dose_g;
+        update();
+        methodGroup.focus(method);
+      });
+      content.append(back);
+    }
+    if (recipe) content.append(renderRecipe(recipe, isRecommended));
+  }
+
+  update();
+  return section;
 }
 
 async function openDetail(id) {
@@ -426,9 +562,11 @@ async function openDetail(id) {
     image.alt = alt;
     hero.append(image);
   });
-  body.append(hero);
+  const about = element("details", "detail-section about");
+  about.append(element("summary", null, "Sobre o café"));
+  about.append(hero);
 
-  const factsSection = element("section", "detail-section");
+  const factsSection = element("section", "about-section");
   factsSection.append(element("h3", null, "Café"));
   const facts = element("div", "fact-grid");
   [
@@ -452,49 +590,18 @@ async function openDetail(id) {
       `Notas oficiais: ${data.coffee.official_sensory_notes.join(", ") || "não informadas"}`,
     ),
   );
-  body.append(factsSection);
 
-  const analysis = element("section", "detail-section");
+  const analysis = element("section", "about-section");
   analysis.append(
     element("h3", null, "Análise inicial"),
     element("p", null, data.analysis.summary),
     element("p", "muted", data.analysis.expected_cup_profile),
   );
-  body.append(analysis);
+  about.append(factsSection, analysis);
 
-  const recommendation = element("section", "detail-section recommendation");
-  recommendation.append(
-    element("p", "eyebrow", "Ponto de partida recomendado"),
-    element(
-      "h3",
-      null,
-      `${methodLabel(data.recommendation.method)} · ${data.recommendation.dose_g} g`,
-    ),
-    element("p", null, data.recommendation.reason),
-  );
-  body.append(recommendation);
-
-  const recipesSection = element("section", "detail-section");
-  recipesSection.append(element("h3", null, "Receitas"));
-  const recipes = element("div", "recipe-grid");
-  data.recipes
-    .slice()
-    .sort(
-      (left, right) =>
-        left.method.localeCompare(right.method) || left.dose_g - right.dose_g,
-    )
-    .forEach((recipe) =>
-      recipes.append(
-        renderRecipe(
-          recipe,
-          recipe.method === data.recommendation.method &&
-            recipe.dose_g === data.recommendation.dose_g,
-        ),
-      ),
-    );
-  recipesSection.append(recipes);
-  body.append(recipesSection, renderReviewForm(record));
+  body.append(renderRecipeViewer(data), renderReviewForm(record), about);
   detailDialog.showModal();
+  detailDialog.scrollTop = 0;
 }
 
 function updateRatingButtons(rating, container) {
